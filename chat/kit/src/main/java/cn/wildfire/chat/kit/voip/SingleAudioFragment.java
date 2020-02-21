@@ -15,20 +15,19 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProviders;
 
-import com.bumptech.glide.Glide;
-
 import org.webrtc.StatsReport;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
+import cn.wildfire.chat.kit.GlideApp;
 import cn.wildfire.chat.kit.user.UserViewModel;
 import cn.wildfirechat.avenginekit.AVEngineKit;
 import cn.wildfirechat.chat.R;
 import cn.wildfirechat.model.UserInfo;
 import cn.wildfirechat.remote.ChatManager;
 
-public class AudioFragment extends Fragment implements AVEngineKit.CallSessionCallback {
+public class SingleAudioFragment extends Fragment implements AVEngineKit.CallSessionCallback {
     private AVEngineKit gEngineKit;
     private boolean micEnabled = true;
     private boolean isSpeakerOn = false;
@@ -51,16 +50,6 @@ public class AudioFragment extends Fragment implements AVEngineKit.CallSessionCa
     TextView descTextView;
     @BindView(R.id.durationTextView)
     TextView durationTextView;
-
-    public static VideoFragment newInstance(String targetId, boolean isOutgoing) {
-
-        VideoFragment fragment = new VideoFragment();
-        Bundle args = new Bundle();
-        args.putBoolean("outgoing", isOutgoing);
-        args.putString("targetId", targetId);
-        fragment.setArguments(args);
-        return fragment;
-    }
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -97,6 +86,16 @@ public class AudioFragment extends Fragment implements AVEngineKit.CallSessionCa
     }
 
     @Override
+    public void didParticipantJoined(String s) {
+
+    }
+
+    @Override
+    public void didParticipantLeft(String s, AVEngineKit.CallEndReason callEndReason) {
+
+    }
+
+    @Override
     public void didChangeMode(boolean audioOnly) {
         // never called
     }
@@ -107,8 +106,13 @@ public class AudioFragment extends Fragment implements AVEngineKit.CallSessionCa
     }
 
     @Override
-    public void didReceiveRemoteVideoTrack() {
-        // should never called
+    public void didReceiveRemoteVideoTrack(String s) {
+
+    }
+
+    @Override
+    public void didRemoveRemoteVideoTrack(String s) {
+
     }
 
     @Override
@@ -116,13 +120,17 @@ public class AudioFragment extends Fragment implements AVEngineKit.CallSessionCa
 
     }
 
-
     @Override
     public void didGetStats(StatsReport[] reports) {
         runOnUiThread(() -> {
             //hudFragment.updateEncoderStatistics(reports);
             // TODO
         });
+    }
+
+    @Override
+    public void didVideoMuted(String s, boolean b) {
+
     }
 
     @OnClick(R.id.muteImageView)
@@ -158,7 +166,7 @@ public class AudioFragment extends Fragment implements AVEngineKit.CallSessionCa
 
     @OnClick(R.id.minimizeImageView)
     public void minimize() {
-        ((SingleVoipCallActivity) getActivity()).showFloatingView();
+        ((SingleCallActivity) getActivity()).showFloatingView();
     }
 
     @OnClick(R.id.speakerImageView)
@@ -177,13 +185,19 @@ public class AudioFragment extends Fragment implements AVEngineKit.CallSessionCa
     }
 
     private void init() {
-        gEngineKit = ((SingleVoipCallActivity) getActivity()).getEngineKit();
-        if (gEngineKit.getCurrentSession() != null && gEngineKit.getCurrentSession().getState() == AVEngineKit.CallState.Connected) {
+        gEngineKit = ((SingleCallActivity) getActivity()).getEngineKit();
+        AVEngineKit.CallSession session = gEngineKit.getCurrentSession();
+        if (session == null || session.getState() == AVEngineKit.CallState.Idle) {
+            getActivity().finish();
+            return;
+        }
+        if (session.getState() == AVEngineKit.CallState.Connected) {
             descTextView.setVisibility(View.GONE);
             outgoingActionContainer.setVisibility(View.VISIBLE);
             durationTextView.setVisibility(View.VISIBLE);
+            minimizeImageView.setVisibility(View.VISIBLE);
         } else {
-            if (((SingleVoipCallActivity) getActivity()).isOutgoing()) {
+            if (session.getState() == AVEngineKit.CallState.Outgoing) {
                 descTextView.setText(R.string.av_waiting);
                 outgoingActionContainer.setVisibility(View.VISIBLE);
                 incomingActionContainer.setVisibility(View.GONE);
@@ -193,9 +207,9 @@ public class AudioFragment extends Fragment implements AVEngineKit.CallSessionCa
                 incomingActionContainer.setVisibility(View.VISIBLE);
             }
         }
-        String targetId = ((SingleVoipCallActivity) getActivity()).getTargetId();
+        String targetId = session.getParticipantIds().get(0);
         UserInfo userInfo = ChatManager.Instance().getUserInfo(targetId, false);
-        Glide.with(this).load(userInfo.portrait).into(portraitImageView);
+        GlideApp.with(this).load(userInfo.portrait).error(R.mipmap.default_header).into(portraitImageView);
         UserViewModel userViewModel = ViewModelProviders.of(this).get(UserViewModel.class);
         nameTextView.setText(userViewModel.getUserDisplayName(userInfo));
         muteImageView.setSelected(!micEnabled);

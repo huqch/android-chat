@@ -48,12 +48,11 @@ import java.util.Map;
 // Declare any non-default types here with import statements
 
 interface IRemoteClient {
-    String getClientId();
     boolean connect(in String userId, in String token);
     oneway void disconnect(in boolean clearSession);
     oneway void setForeground(in int isForeground);
     oneway void onNetworkChange();
-    oneway void setServerAddress(in String host, in int port);
+    oneway void setServerAddress(in String host);
 
     oneway void setOnReceiveMessageListener(in IOnReceiveMessageListener listener);
     oneway void setOnConnectionStatusChangeListener(in IOnConnectionStatusChangeListener listener);
@@ -86,17 +85,18 @@ interface IRemoteClient {
 
     UnreadCount getUnreadCount(in int conversationType, in String target, in int line);
     UnreadCount getUnreadCountEx(in int[] conversationTypes, in int[] lines);
-    void clearUnreadStatus(in int conversationType, in String target, in int line);
-    oneway void clearUnreadStatusEx(in int[] conversationTypes, in int[] lines);
+    boolean clearUnreadStatus(in int conversationType, in String target, in int line);
+    boolean clearUnreadStatusEx(in int[] conversationTypes, in int[] lines);
     oneway void clearAllUnreadStatus();
     oneway void clearMessages(in int conversationType, in String target, in int line);
+    oneway void clearMessagesEx(in int conversationType, in String target, in int line, in long before);
     oneway void setMediaMessagePlayed(in long messageId);
     oneway void removeConversation(in int conversationType, in String target, in int line, in boolean clearMsg);
     oneway void setConversationTop(in int conversationType, in String target, in int line, in boolean top);
     oneway void setConversationDraft(in int conversationType, in String target, in int line, in String draft);
     oneway void setConversationSilent(in int conversationType, in String target, in int line, in boolean silent);
 
-    oneway void searchUser(in String keyword, in boolean fuzzy, in ISearchUserCallback callback);
+    oneway void searchUser(in String keyword, in int searchType, in int page, in ISearchUserCallback callback);
 
     boolean isMyFriend(in String userId);
     List<String> getMyFriendList(in boolean refresh);
@@ -158,6 +158,8 @@ interface IRemoteClient {
     oneway void setGroupManager(in String groupId, in boolean isSet, in List<String> memberIds, in int[] notifyLines, in MessagePayload notifyMsg, in IGeneralCallback callback);
     byte[] encodeData(in byte[] data);
     byte[] decodeData(in byte[] data);
+
+    String getHost();
     oneway void createChannel(in String channelId, in String channelName, in String channelPortrait, in String desc, in String extra, in ICreateChannelCallback callback);
     oneway void modifyChannelInfo(in String channelId, in int modifyType, in String newValue, in IGeneralCallback callback);
     ChannelInfo getChannelInfo(in String channelId, in boolean refresh);

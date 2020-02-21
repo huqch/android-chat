@@ -39,8 +39,13 @@ public class ImageMessageContent extends MediaMessageContent {
     }
 
     public Bitmap getThumbnail() {
+        if (thumbnail != null) {
+            return thumbnail;
+        }
         if (thumbnailBytes != null) {
             thumbnail = BitmapFactory.decodeByteArray(thumbnailBytes, 0, thumbnailBytes.length);
+        } else if (!TextUtils.isEmpty(localPath)) {
+            thumbnail = ThumbnailUtils.extractThumbnail(BitmapFactory.decodeFile(localPath), 200, 200);
         }
         return thumbnail;
     }
@@ -73,6 +78,20 @@ public class ImageMessageContent extends MediaMessageContent {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 thumbnail.compress(Bitmap.CompressFormat.JPEG, 75, baos);
                 payload.binaryContent = baos.toByteArray();
+            }
+        } else {
+            if (!TextUtils.isEmpty(thumbPara) && imageHeight > 0 && imageWidth > 0) {
+                try {
+                    JSONObject objWrite = new JSONObject();
+                    objWrite.put("w", imageWidth);
+                    objWrite.put("h", imageHeight);
+                    objWrite.put("tp", thumbPara);
+                    payload.content = objWrite.toString();
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            } else {
+                payload.binaryContent = thumbnailBytes;
             }
         }
 

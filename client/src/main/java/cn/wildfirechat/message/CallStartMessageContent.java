@@ -2,8 +2,12 @@ package cn.wildfirechat.message;
 
 import android.os.Parcel;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import cn.wildfirechat.message.core.ContentTag;
 import cn.wildfirechat.message.core.MessagePayload;
@@ -18,7 +22,8 @@ import static cn.wildfirechat.message.core.MessageContentType.ContentType_Call_S
 @ContentTag(type = ContentType_Call_Start, flag = PersistFlag.Persist)
 public class CallStartMessageContent extends MessageContent {
     private String callId;
-    private String targetId;
+    // 多人视音频是有效
+    private List<String> targetIds;
     private long connectTime;
     private long endTime;
     private boolean audioOnly;
@@ -40,10 +45,10 @@ public class CallStartMessageContent extends MessageContent {
     public CallStartMessageContent() {
     }
 
-    public CallStartMessageContent(String callId, String targetId, boolean audioOnly) {
+    public CallStartMessageContent(String callId, List<String> targetIds, boolean audioOnly) {
         this.callId = callId;
         this.audioOnly = audioOnly;
-        this.targetId = targetId;
+        this.targetIds = targetIds;
     }
 
     public String getCallId() {
@@ -78,20 +83,20 @@ public class CallStartMessageContent extends MessageContent {
         this.status = status;
     }
 
-    public String getTargetId() {
-        return targetId;
-    }
-
-    public void setTargetId(String targetId) {
-        this.targetId = targetId;
-    }
-
     public boolean isAudioOnly() {
         return audioOnly;
     }
 
     public void setAudioOnly(boolean audioOnly) {
         this.audioOnly = audioOnly;
+    }
+
+    public List<String> getTargetIds() {
+        return targetIds;
+    }
+
+    public void setTargetIds(List<String> targetIds) {
+        this.targetIds = targetIds;
     }
 
     @Override
@@ -113,7 +118,9 @@ public class CallStartMessageContent extends MessageContent {
                 objWrite.put("s", status);
             }
 
-            objWrite.put("t", targetId);
+            objWrite.put("t", targetIds.get(0));
+            JSONArray ts = new JSONArray(targetIds);
+            objWrite.put("ts", ts);
             objWrite.put("a", audioOnly ? 1 : 0);
 
             payload.binaryContent = objWrite.toString().getBytes();
@@ -134,7 +141,17 @@ public class CallStartMessageContent extends MessageContent {
                 connectTime = jsonObject.optLong("c", 0);
                 endTime = jsonObject.optLong("e", 0);
                 status = jsonObject.optInt("s", 0);
-                targetId = jsonObject.optString("t");
+                JSONArray array = jsonObject.optJSONArray("ts");
+                targetIds = new ArrayList<>();
+                if (array == null) {
+                    targetIds.add(jsonObject.getString("t"));
+                } else {
+                    for (int i = 0; i < array.length(); i++) {
+                        if (array.get(i) instanceof String) {
+                            targetIds.add((String) array.get(i));
+                        }
+                    }
+                }
                 audioOnly = jsonObject.optInt("a") > 0;
             }
         } catch (JSONException e) {
@@ -157,7 +174,7 @@ public class CallStartMessageContent extends MessageContent {
     public void writeToParcel(Parcel dest, int flags) {
         super.writeToParcel(dest, flags);
         dest.writeString(this.callId);
-        dest.writeString(this.targetId);
+        dest.writeStringList(this.targetIds);
         dest.writeLong(this.connectTime);
         dest.writeLong(this.endTime);
         dest.writeByte(this.audioOnly ? (byte) 1 : (byte) 0);
@@ -167,7 +184,8 @@ public class CallStartMessageContent extends MessageContent {
     protected CallStartMessageContent(Parcel in) {
         super(in);
         this.callId = in.readString();
-        this.targetId = in.readString();
+        this.targetIds = new ArrayList<>();
+        in.readStringList(this.targetIds);
         this.connectTime = in.readLong();
         this.endTime = in.readLong();
         this.audioOnly = in.readByte() != 0;

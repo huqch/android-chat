@@ -11,6 +11,7 @@ import cn.wildfire.chat.kit.annotation.MessageContentType;
 import cn.wildfire.chat.kit.conversation.ConversationFragment;
 import cn.wildfire.chat.kit.conversation.message.model.UiMessage;
 import cn.wildfirechat.chat.R;
+import cn.wildfirechat.message.AddParticipantsMessageContent;
 import cn.wildfirechat.message.notification.AddGroupMemberNotificationContent;
 import cn.wildfirechat.message.notification.ChangeGroupNameNotificationContent;
 import cn.wildfirechat.message.notification.ChangeGroupPortraitNotificationContent;
@@ -44,7 +45,8 @@ import cn.wildfirechat.message.notification.TransferGroupOwnerNotificationConten
         GroupMuteNotificationContent.class,
         GroupPrivateChatNotificationContent.class,
         GroupJoinTypeNotificationContent.class,
-        GroupSetManagerChatNotificationContent.class
+        GroupSetManagerChatNotificationContent.class,
+        AddParticipantsMessageContent.class
         // TODO add more
 
 })
@@ -53,7 +55,7 @@ import cn.wildfirechat.message.notification.TransferGroupOwnerNotificationConten
  * 小灰条消息, 居中显示，且不显示发送者，用于简单通知，如果需要扩展成复杂通知，可以参考 {@link ExampleRichNotificationMessageContentViewHolder}
  *
  */
-public class SimpleNotificationMessageContentViewHolder extends MessageContentViewHolder {
+public class SimpleNotificationMessageContentViewHolder extends NotificationMessageContentViewHolder {
 
     @BindView(R.id.notificationTextView)
     TextView notificationTextView;

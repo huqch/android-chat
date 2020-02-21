@@ -16,8 +16,8 @@ android {
         applicationId "cn.wildfirechat.chat"
         minSdkVersion 16
         targetSdkVersion 28 //当targetversion大于23时，需要使用fileprovider
-        versionCode 19
-        versionName "0.6.5"
+        versionCode 23
+        versionName "0.6.9"
         multiDexEnabled true
         javaCompileOptions {
             annotationProcessorOptions {
@@ -26,7 +26,7 @@ android {
         }
         signingConfig signingConfigs.wfc
 
-        buildConfigField("String", "BuglyId", '"34490ba79f"')
+//        buildConfigField("String", "BuglyId", '"34490ba79f"')
 
         ndk {
             abiFilters "armeabi-v7a", 'x86', 'x86_64' // ，'armeabi', 'arm64-v8a', 'x86', 'x86_64'
@@ -111,5 +111,7 @@ dependencies {
 
     implementation 'com.king.zxing:zxing-lite:1.1.1'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.0.0'
+    implementation 'androidx.gridlayout:gridlayout:1.0.0'
+    implementation 'com.google.android:flexbox:2.0.1'
     // kit wfc end
 }

@@ -163,7 +163,7 @@ public class GroupConversationInfoFragment extends Fragment implements Conversat
         progressBar.setVisibility(View.VISIBLE);
 
         groupViewModel = ViewModelProviders.of(this).get(GroupViewModel.class);
-        groupInfo = groupViewModel.getGroupInfo(conversationInfo.conversation.target, false);
+        groupInfo = groupViewModel.getGroupInfo(conversationInfo.conversation.target, true);
         if (groupInfo != null) {
             groupMember = ChatManager.Instance().getGroupMember(groupInfo.target, ChatManager.Instance().getUserId());
         }
@@ -302,7 +302,7 @@ public class GroupConversationInfoFragment extends Fragment implements Conversat
             memberIds = memberIds.subList(0, maxShowMemberCount);
         }
 
-        conversationMemberAdapter = new ConversationMemberAdapter(enableAddMember, enableRemoveMember);
+        conversationMemberAdapter = new ConversationMemberAdapter(conversationInfo, enableAddMember, enableRemoveMember);
         List<UserInfo> members = UserViewModel.getUsers(memberIds, groupInfo.target);
 
         conversationMemberAdapter.setMembers(members);
@@ -353,7 +353,7 @@ public class GroupConversationInfoFragment extends Fragment implements Conversat
     void updateMyGroupAlias() {
         MaterialDialog dialog = new MaterialDialog.Builder(getActivity())
                 .input("请输入你的群昵称", groupMember.alias, false, (dialog1, input) -> {
-                    groupViewModel.modifyMyGroupAlias(groupInfo.target, input.toString().trim())
+                    groupViewModel.modifyMyGroupAlias(groupInfo.target, input.toString().trim(), null, Collections.singletonList(0))
                             .observe(GroupConversationInfoFragment.this, operateResult -> {
                                 if (operateResult.isSuccess()) {
                                     myGroupNickNameOptionItemView.setDesc(input.toString().trim());
@@ -374,7 +374,7 @@ public class GroupConversationInfoFragment extends Fragment implements Conversat
     @OnClick(R.id.quitButton)
     void quitGroup() {
         if (groupInfo != null && userViewModel.getUserId().equals(groupInfo.owner)) {
-            groupViewModel.dismissGroup(conversationInfo.conversation.target, Collections.singletonList(0)).observe(this, aBoolean -> {
+            groupViewModel.dismissGroup(conversationInfo.conversation.target, Collections.singletonList(0), null).observe(this, aBoolean -> {
                 if (aBoolean != null && aBoolean) {
                     Intent intent = new Intent(getActivity(), MainActivity.class);
                     startActivity(intent);
@@ -383,7 +383,7 @@ public class GroupConversationInfoFragment extends Fragment implements Conversat
                 }
             });
         } else {
-            groupViewModel.quitGroup(conversationInfo.conversation.target, Collections.singletonList(0)).observe(this, aBoolean -> {
+            groupViewModel.quitGroup(conversationInfo.conversation.target, Collections.singletonList(0), null).observe(this, aBoolean -> {
                 if (aBoolean != null && aBoolean) {
                     Intent intent = new Intent(getActivity(), MainActivity.class);
                     startActivity(intent);
@@ -415,7 +415,7 @@ public class GroupConversationInfoFragment extends Fragment implements Conversat
 
     @Override
     public void onUserMemberClick(UserInfo userInfo) {
-        if (groupInfo != null && groupInfo.privateChat == 1 && groupMember.type == GroupMember.GroupMemberType.Normal) {
+        if (groupInfo != null && groupInfo.privateChat == 1 && groupMember.type != GroupMember.GroupMemberType.Owner && groupMember.type != GroupMember.GroupMemberType.Manager && !userInfo.uid.equals(groupInfo.owner)) {
             Toast.makeText(getActivity(), "禁止群成员私聊", Toast.LENGTH_SHORT).show();
             return;
         }

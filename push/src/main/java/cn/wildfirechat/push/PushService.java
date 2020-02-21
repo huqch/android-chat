@@ -17,6 +17,9 @@ import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.OnLifecycleEvent;
 import androidx.lifecycle.ProcessLifecycleOwner;
 
+import com.heytap.mcssdk.PushManager;
+import com.heytap.mcssdk.callback.PushCallback;
+import com.heytap.mcssdk.mode.SubscribeResult;
 import com.huawei.hms.api.ConnectionResult;
 import com.huawei.hms.api.HuaweiApiClient;
 import com.huawei.hms.support.api.client.PendingResult;
@@ -38,6 +41,7 @@ import java.util.List;
 import java.util.Properties;
 
 import cn.wildfirechat.remote.ChatManager;
+import cn.wildfirechat.PushType;
 
 /**
  * Created by heavyrain.lee on 2018/2/26.
@@ -51,7 +55,7 @@ public class PushService {
     private static String applicationId;
 
     public enum PushServiceType {
-        Unknown, Xiaomi, HMS, MeiZu, VIVO
+        Unknown, Xiaomi, HMS, MeiZu, VIVO, OPPO
     }
 
     public static void init(Application gContext, String applicationId) {
@@ -66,6 +70,9 @@ public class PushService {
         } else if (SYS_VIVO.equalsIgnoreCase(sys)) {
             INST.pushServiceType = PushServiceType.VIVO;
             INST.initVIVO(gContext);
+        } else if(PushManager.isSupportPush(gContext)) {
+            INST.pushServiceType = PushServiceType.OPPO;
+            INST.initOPPO(gContext);
         } else /*if (SYS_MIUI.equals(sys) && INST.isXiaomiConfigured(gContext))*/ {
             //MIUI或其它使用小米推送
             INST.pushServiceType = PushServiceType.Xiaomi;
@@ -243,7 +250,7 @@ public class PushService {
                     String pushId = com.meizu.cloud.pushsdk.PushManager.getPushId(context);
                     com.meizu.cloud.pushsdk.PushManager.register(context, String.valueOf(appId), appKey);
                     com.meizu.cloud.pushsdk.PushManager.switchPush(context, String.valueOf(appId), appKey, pushId, 1, true);
-                    ChatManager.Instance().setDeviceToken(pushId, ChatManager.PushType.MeiZu);
+                    ChatManager.Instance().setDeviceToken(pushId, PushType.MEIZU);
                 }
             }
         } catch (Exception e) {
@@ -263,10 +270,94 @@ public class PushService {
                 Log.d("PushService", "vivo turnOnPush " + state);
                 String regId = PushClient.getInstance(context).getRegId();
                 if (!TextUtils.isEmpty(regId)) {
-                    ChatManager.Instance().setDeviceToken(regId, ChatManager.PushType.VIVO);
+                    ChatManager.Instance().setDeviceToken(regId, PushType.VIVO);
                 }
             }
         });
+    }
+
+    private void initOPPO(Context context) {
+        String packageName = context.getPackageName();
+        try {
+            ApplicationInfo appInfo = context.getPackageManager().getApplicationInfo(packageName, PackageManager.GET_META_DATA);
+            if (appInfo.metaData != null) {
+                String appsecret = appInfo.metaData.getString("OPPO_APP_PUSH_SECRET");
+                String appkey = appInfo.metaData.getString("OPPO_APP_PUSH_KEY");
+                PushManager.getInstance().register(context, appkey, appsecret, new PushCallback() {
+                    @Override
+                    public void onRegister(int i, String s) {
+                        ChatManager.Instance().setDeviceToken(s, PushType.OPPO);
+                    }
+
+                    @Override
+                    public void onUnRegister(int i) {
+
+                    }
+
+                    @Override
+                    public void onSetPushTime(int i, String s) {
+
+                    }
+
+                    @Override
+                    public void onGetPushStatus(int i, int i1) {
+
+                    }
+
+                    @Override
+                    public void onGetNotificationStatus(int i, int i1) {
+
+                    }
+
+                    @Override
+                    public void onGetAliases(int i, List<SubscribeResult> list) {
+
+                    }
+
+                    @Override
+                    public void onSetAliases(int i, List<SubscribeResult> list) {
+
+                    }
+
+                    @Override
+                    public void onUnsetAliases(int i, List<SubscribeResult> list) {
+
+                    }
+
+                    @Override
+                    public void onSetUserAccounts(int i, List<SubscribeResult> list) {
+
+                    }
+
+                    @Override
+                    public void onUnsetUserAccounts(int i, List<SubscribeResult> list) {
+
+                    }
+
+                    @Override
+                    public void onGetUserAccounts(int i, List<SubscribeResult> list) {
+
+                    }
+
+                    @Override
+                    public void onSetTags(int i, List<SubscribeResult> list) {
+
+                    }
+
+                    @Override
+                    public void onUnsetTags(int i, List<SubscribeResult> list) {
+
+                    }
+
+                    @Override
+                    public void onGetTags(int i, List<SubscribeResult> list) {
+
+                    }
+                });
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
 

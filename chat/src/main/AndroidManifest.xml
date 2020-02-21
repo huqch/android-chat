@@ -126,14 +126,22 @@
             android:screenOrientation="portrait"
             android:theme="@style/AppTheme.FullScreen" />
         <activity
-            android:name="cn.wildfire.chat.kit.voip.SingleVoipCallActivity"
+            android:name="cn.wildfire.chat.kit.voip.SingleCallActivity"
             android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="${applicationId}.kit.voip.single" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-
         </activity>
+        <activity
+            android:name="cn.wildfire.chat.kit.voip.MultiCallIncomingActivity"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="${applicationId}.kit.voip.multi" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name="cn.wildfire.chat.kit.conversation.CreateConversationActivity"
             android:label="创建会话" />
@@ -241,6 +249,7 @@
             android:name="cn.wildfire.chat.kit.contact.pick.PickContactActivity"
             android:label="联系人选择" />
         <activity android:name="cn.wildfire.chat.kit.group.SetGroupAnnouncementActivity" />
+        <activity android:name="cn.wildfire.chat.kit.voip.MultiCallActivity" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -251,6 +260,7 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/provider_paths" />
         </provider>
-        <service android:name="cn.wildfire.chat.kit.voip.FloatingVoipService" />
+        <service android:name="cn.wildfire.chat.kit.voip.SingleCallFloatingService" />
+        <service android:name="cn.wildfire.chat.kit.voip.MultiCallFloatingService" />
     </application>
 </manifest>

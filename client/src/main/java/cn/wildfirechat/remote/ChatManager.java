@@ -11,6 +11,8 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.RemoteException;
+import android.preference.PreferenceManager;
+import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.LruCache;
@@ -23,14 +25,18 @@ import androidx.lifecycle.OnLifecycleEvent;
 import androidx.lifecycle.ProcessLifecycleOwner;
 
 import java.io.File;
+import java.io.RandomAccessFile;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import cn.wildfirechat.ErrorCode;
 import cn.wildfirechat.UserSource;
@@ -89,7 +95,6 @@ public class ChatManager {
     private static final String TAG = ChatManager.class.getName();
 
     private String SERVER_HOST;
-    private int SERVER_PORT;
 
     private static IRemoteClient mClient;
 
@@ -101,7 +106,8 @@ public class ChatManager {
     private Handler mainHandler;
     private Handler workHandler;
     private String deviceToken;
-    private PushType pushType;
+    private String clientId;
+    private int pushType;
     private List<String> msgList = new ArrayList<>();
 
     private UserSource userSource;
@@ -133,15 +139,22 @@ public class ChatManager {
     // key = memberId@groupId
     private LruCache<String, GroupMember> groupMemberCache;
 
-    public enum PushType {
-        Xiaomi(1),
-        HMS(2),
-        MeiZu(3),
-        VIVO(4);
+    public enum SearchUserType {
+        //模糊搜索displayName，精确搜索name或电话号码
+        General(0),
+
+        //精确搜索name或电话号码
+        NameOrMobile(1),
+
+        //精确搜索name
+        Name(2),
+
+        //精确搜索电话号码
+        Mobile(3);
 
         private int value;
 
-        PushType(int value) {
+        SearchUserType(int value) {
             this.value = value;
         }
 
@@ -165,9 +178,8 @@ public class ChatManager {
         void onFailure(int errorCode);
     }
 
-    private ChatManager(String serverHost, int serverPort) {
+    private ChatManager(String serverHost) {
         this.SERVER_HOST = serverHost;
-        this.SERVER_PORT = serverPort;
     }
 
     public static ChatManager Instance() throws NotInitializedExecption {
@@ -184,17 +196,16 @@ public class ChatManager {
      *
      * @param context
      * @param serverHost
-     * @param serverPort
      * @return
      */
 
-    public static void init(Application context, String serverHost, int serverPort) {
+    public static void init(Application context, String serverHost) {
         if (INST != null) {
             // TODO: Already initialized
             return;
         }
         gContext = context.getApplicationContext();
-        INST = new ChatManager(serverHost, serverPort);
+        INST = new ChatManager(serverHost);
         INST.mainHandler = new Handler();
         HandlerThread thread = new HandlerThread("workHandler");
         thread.start();
@@ -233,6 +244,10 @@ public class ChatManager {
         SharedPreferences sp = gContext.getSharedPreferences("wildfirechat.config", Context.MODE_PRIVATE);
         INST.userId = sp.getString("userId", null);
         INST.token = sp.getString("token", null);
+    }
+
+    public Context getApplicationContext() {
+        return gContext;
     }
 
     /**
@@ -304,8 +319,6 @@ public class ChatManager {
         if (message == null) {
             return;
         }
-        ConversationInfo conversationInfo = getConversation(message.conversation);
-        conversationInfo.lastMessage = message;
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -596,16 +609,44 @@ public class ChatManager {
     }
 
     /**
-     * 获取clientId, 火信用clientId唯一表示用户设备
-     *
-     * @return
-     * @throws Exception
+     * 获取clientId, 野火IM用clientId唯一表示用户设备
      */
-    public String getClientId() throws Exception {
-        if (!checkRemoteService()) {
-            throw new Exception("mars service not connected");
+    public synchronized String getClientId() {
+        if (this.clientId != null) {
+            return this.clientId;
         }
-        return mClient.getClientId();
+
+        String imei = null;
+        try (
+                RandomAccessFile fw = new RandomAccessFile(gContext.getFilesDir().getAbsoluteFile() + "/.wfcClientId", "rw");
+        ) {
+
+            FileChannel chan = fw.getChannel();
+            FileLock lock = chan.lock();
+            imei = fw.readLine();
+            if (TextUtils.isEmpty(imei)) {
+                // 迁移就的clientId
+                imei = PreferenceManager.getDefaultSharedPreferences(gContext).getString("mars_core_uid", "");
+                if (TextUtils.isEmpty(imei)) {
+                    try {
+                        imei = Settings.Secure.getString(gContext.getContentResolver(), Settings.Secure.ANDROID_ID);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    if (TextUtils.isEmpty(imei)) {
+                        imei = UUID.randomUUID().toString();
+                    }
+                    imei += System.currentTimeMillis();
+                }
+                fw.writeBytes(imei);
+            }
+            lock.release();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            Log.e("getClientError", "" + ex.getMessage());
+        }
+        this.clientId = imei;
+        return imei;
     }
 
     /**
@@ -1720,16 +1761,15 @@ public class ChatManager {
         }
 
         try {
-            UnreadCount unreadCount = getUnreadCount(conversation);
-            if (unreadCount.unread == 0 && unreadCount.unreadMention == 0 && unreadCount.unreadMentionAll == 0) {
-                return;
+
+            if (mClient.clearUnreadStatus(conversation.type.getValue(), conversation.target, conversation.line)) {
+                ConversationInfo conversationInfo = getConversation(conversation);
+                conversationInfo.unreadCount = new UnreadCount();
+                for (OnConversationInfoUpdateListener listener : conversationInfoUpdateListeners) {
+                    listener.onConversationUnreadStatusClear(conversationInfo);
+                }
             }
-            mClient.clearUnreadStatus(conversation.type.getValue(), conversation.target, conversation.line);
-            ConversationInfo conversationInfo = getConversation(conversation);
-            conversationInfo.unreadCount = new UnreadCount();
-            for (OnConversationInfoUpdateListener listener : conversationInfoUpdateListeners) {
-                listener.onConversationUnreadStatusClear(conversationInfo, unreadCount);
-            }
+
         } catch (RemoteException e) {
             e.printStackTrace();
         }
@@ -1794,6 +1834,30 @@ public class ChatManager {
 
         try {
             mClient.clearMessages(conversation.type.getValue(), conversation.target, conversation.line);
+
+            for (OnClearMessageListener listener : clearMessageListeners) {
+                listener.onClearMessage(conversation);
+            }
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void clearMessages(Conversation conversation, long beforeTime) {
+        if (!checkRemoteService()) {
+            return;
+        }
+
+        try {
+            int convType = 0;
+            String target = "";
+            int line = 0;
+            if (conversation != null) {
+                convType = conversation.type.getValue();
+                target = conversation.target;
+                line = conversation.line;
+            }
+            mClient.clearMessagesEx(convType, target, line, beforeTime);
 
             for (OnClearMessageListener listener : clearMessageListeners) {
                 listener.onClearMessage(conversation);
@@ -1880,7 +1944,7 @@ public class ChatManager {
         }
     }
 
-    public void searchUser(String keyword, boolean fuzzy, final SearchUserCallback callback) {
+    public void searchUser(String keyword, SearchUserType searchUserType, int page, final SearchUserCallback callback) {
         if (userSource != null) {
             userSource.searchUser(keyword, callback);
             return;
@@ -1892,7 +1956,7 @@ public class ChatManager {
         }
 
         try {
-            mClient.searchUser(keyword, fuzzy, new cn.wildfirechat.client.ISearchUserCallback.Stub() {
+            mClient.searchUser(keyword, searchUserType.ordinal(), page, new cn.wildfirechat.client.ISearchUserCallback.Stub() {
                 @Override
                 public void onSuccess(final List<UserInfo> userInfos) throws RemoteException {
                     if (callback != null) {
@@ -2225,7 +2289,7 @@ public class ChatManager {
 
         return false;
     }
-    
+
     public List<String> getBlackList(boolean refresh) {
         if (!checkRemoteService()) {
             return null;
@@ -3262,6 +3326,19 @@ public class ChatManager {
         }
     }
 
+    public String getHost() {
+        if (!checkRemoteService()) {
+            return null;
+        }
+
+        try {
+            return mClient.getHost();
+        } catch (RemoteException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     public String getUserSetting(int scope, String key) {
         if (!checkRemoteService()) {
             return null;
@@ -3471,7 +3548,27 @@ public class ChatManager {
         }
     }
 
-    public void setDeviceToken(String token, PushType pushType) {
+    private String getLogPath() {
+        return gContext.getCacheDir().getAbsolutePath() + "/log";
+    }
+
+    public List<String> getLogFilesPath() {
+        List<String> paths = new ArrayList<>();
+        String path = getLogPath();
+
+        //遍历path目录下的所有日志文件，以wflog开头的
+        File dir = new File(path);
+        File[] subFile = dir.listFiles();
+        for (File file : subFile) {
+            //wflog为ChatService中定义的，如果修改需要对应修改
+            if (file.isFile() && file.getName().startsWith("wflog_")) {
+                paths.add(file.getAbsolutePath());
+            }
+        }
+        return paths;
+    }
+
+    public void setDeviceToken(String token, int pushType) {
         deviceToken = token;
         this.pushType = pushType;
         if (!checkRemoteService()) {
@@ -3479,7 +3576,7 @@ public class ChatManager {
         }
 
         try {
-            mClient.setDeviceToken(token, pushType.value());
+            mClient.setDeviceToken(token, pushType);
         } catch (RemoteException e) {
             e.printStackTrace();
             return;
@@ -3565,6 +3662,7 @@ public class ChatManager {
             }
 
             Intent intent = new Intent(gContext, ClientService.class);
+            intent.putExtra("clientId", getClientId());
             boolean result = gContext.bindService(intent, serviceConnection, BIND_AUTO_CREATE);
             if (!result) {
                 Log.e(TAG, "Bind service failure");
@@ -3581,7 +3679,7 @@ public class ChatManager {
         public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
             mClient = IRemoteClient.Stub.asInterface(iBinder);
             try {
-                mClient.setServerAddress(SERVER_HOST, SERVER_PORT);
+                mClient.setServerAddress(SERVER_HOST);
                 for (String msgName : msgList) {
                     mClient.registerMessageContent(msgName);
                 }
@@ -3593,7 +3691,7 @@ public class ChatManager {
                 }
 
                 if (!TextUtils.isEmpty(deviceToken)) {
-                    mClient.setDeviceToken(deviceToken, pushType.value());
+                    mClient.setDeviceToken(deviceToken, pushType);
                 }
 
                 mClient.setForeground(1);

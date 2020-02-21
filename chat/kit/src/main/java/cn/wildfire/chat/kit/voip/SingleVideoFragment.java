@@ -17,8 +17,6 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProviders;
 
-import com.bumptech.glide.Glide;
-
 import org.webrtc.Logging;
 import org.webrtc.RendererCommon;
 import org.webrtc.StatsReport;
@@ -26,12 +24,13 @@ import org.webrtc.StatsReport;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
+import cn.wildfire.chat.kit.GlideApp;
 import cn.wildfire.chat.kit.user.UserViewModel;
 import cn.wildfirechat.avenginekit.AVEngineKit;
 import cn.wildfirechat.chat.R;
 import cn.wildfirechat.model.UserInfo;
 
-public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCallback {
+public class SingleVideoFragment extends Fragment implements AVEngineKit.CallSessionCallback {
 
     @BindView(R.id.pip_video_view)
     FrameLayout pipRenderer;
@@ -61,7 +60,6 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
 
     // True if local view is in the fullscreen renderer.
     private boolean isSwappedFeeds;
-    private boolean isOutgoing;
     private String targetId;
     private AVEngineKit gEngineKit;
 
@@ -72,21 +70,9 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
     private Toast logToast;
     private static final String TAG = "VideoFragment";
 
-    public static VideoFragment newInstance(String targetId, boolean isOutgoing) {
-
-        VideoFragment fragment = new VideoFragment();
-        Bundle args = new Bundle();
-        args.putBoolean("outgoing", isOutgoing);
-        args.putString("targetId", targetId);
-        fragment.setArguments(args);
-        return fragment;
-    }
-
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        isOutgoing = ((SingleVoipCallActivity) getActivity()).isOutgoing();
-        targetId = ((SingleVoipCallActivity) getActivity()).getTargetId();
     }
 
     @Nullable
@@ -122,10 +108,20 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
     }
 
     @Override
+    public void didParticipantJoined(String s) {
+
+    }
+
+    @Override
+    public void didParticipantLeft(String s, AVEngineKit.CallEndReason callEndReason) {
+
+    }
+
+    @Override
     public void didChangeMode(boolean audioOnly) {
         if (audioOnly) {
             gEngineKit.getCurrentSession().setupLocalVideo(null, scalingType);
-            gEngineKit.getCurrentSession().setupRemoteVideo(null, scalingType);
+            gEngineKit.getCurrentSession().setupRemoteVideo(targetId, null, scalingType);
         }
     }
 
@@ -135,7 +131,7 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
         if (surfaceView != null) {
             surfaceView.setZOrderMediaOverlay(true);
             localSurfaceView = surfaceView;
-            if (isOutgoing && remoteSurfaceView == null) {
+            if (gEngineKit.getCurrentSession().getState() == AVEngineKit.CallState.Outgoing && remoteSurfaceView == null) {
                 fullscreenRenderer.addView(surfaceView);
             } else {
                 pipRenderer.addView(surfaceView);
@@ -145,9 +141,14 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
     }
 
     @Override
-    public void didReceiveRemoteVideoTrack() {
+    public void didRemoveRemoteVideoTrack(String s) {
+
+    }
+
+    @Override
+    public void didReceiveRemoteVideoTrack(String userId) {
         pipRenderer.setVisibility(View.VISIBLE);
-        if (isOutgoing && localSurfaceView != null) {
+        if (gEngineKit.getCurrentSession().getState() == AVEngineKit.CallState.Outgoing && localSurfaceView != null) {
             ((ViewGroup) localSurfaceView.getParent()).removeView(localSurfaceView);
             pipRenderer.addView(localSurfaceView);
             gEngineKit.getCurrentSession().setupLocalVideo(localSurfaceView, scalingType);
@@ -158,7 +159,7 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
             remoteSurfaceView = surfaceView;
             fullscreenRenderer.removeAllViews();
             fullscreenRenderer.addView(surfaceView);
-            gEngineKit.getCurrentSession().setupRemoteVideo(surfaceView, scalingType);
+            gEngineKit.getCurrentSession().setupRemoteVideo(userId, surfaceView, scalingType);
         }
     }
 
@@ -173,6 +174,11 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
         // TODO
     }
 
+    @Override
+    public void didVideoMuted(String s, boolean b) {
+
+    }
+
     @OnClick(R.id.acceptImageView)
     public void accept() {
         AVEngineKit.CallSession session = gEngineKit.getCurrentSession();
@@ -185,12 +191,12 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
 
     @OnClick({R.id.incomingAudioOnlyImageView})
     public void audioAccept() {
-        ((SingleVoipCallActivity) getActivity()).audioAccept();
+        ((SingleCallActivity) getActivity()).audioAccept();
     }
 
     @OnClick({R.id.outgoingAudioOnlyImageView, R.id.connectedAudioOnlyImageView})
     public void audioCall() {
-        ((SingleVoipCallActivity) getActivity()).audioCall();
+        ((SingleCallActivity) getActivity()).audioCall();
     }
 
     // callFragment.OnCallEvents interface implementation.
@@ -247,7 +253,9 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
     @OnClick(R.id.minimizeImageView)
     public void minimize() {
         gEngineKit.getCurrentSession().stopVideoSource();
-        ((SingleVoipCallActivity) getActivity()).showFloatingView();
+        gEngineKit.getCurrentSession().setupLocalVideo(null, scalingType);
+        gEngineKit.getCurrentSession().setupRemoteVideo(targetId, null, scalingType);
+        ((SingleCallActivity) getActivity()).showFloatingView();
     }
 
     // Log |msg| and Toast about it.
@@ -266,13 +274,13 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
         if (session != null && session.getState() == AVEngineKit.CallState.Connected) {
             Logging.d(TAG, "setSwappedFeeds: " + isSwappedFeeds);
             this.isSwappedFeeds = !isSwappedFeeds;
-            session.setupRemoteVideo(isSwappedFeeds ? localSurfaceView : remoteSurfaceView, scalingType);
+            session.setupRemoteVideo(targetId, isSwappedFeeds ? localSurfaceView : remoteSurfaceView, scalingType);
             session.setupLocalVideo(isSwappedFeeds ? remoteSurfaceView : localSurfaceView, scalingType);
         }
     }
 
     private void init() {
-        gEngineKit = ((SingleVoipCallActivity) getActivity()).getEngineKit();
+        gEngineKit = ((SingleCallActivity) getActivity()).getEngineKit();
         AVEngineKit.CallSession session = gEngineKit.getCurrentSession();
         if (session == null || AVEngineKit.CallState.Idle == session.getState()) {
             getActivity().finish();
@@ -283,15 +291,21 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
             inviteeInfoContainer.setVisibility(View.GONE);
             minimizeImageView.setVisibility(View.VISIBLE);
 
+            targetId = session.getParticipantIds().get(0);
+
             session.startVideoSource();
             didCreateLocalVideoTrack();
-            didReceiveRemoteVideoTrack();
+            didReceiveRemoteVideoTrack(targetId);
         } else {
-            if (isOutgoing) {
+            targetId = session.getParticipantIds().get(0);
+
+            if (session.getState() == AVEngineKit.CallState.Outgoing) {
                 incomingActionContainer.setVisibility(View.GONE);
                 outgoingActionContainer.setVisibility(View.VISIBLE);
                 connectedActionContainer.setVisibility(View.GONE);
                 descTextView.setText(R.string.av_waiting);
+
+                gEngineKit.getCurrentSession().startPreview();
             } else {
                 incomingActionContainer.setVisibility(View.VISIBLE);
                 outgoingActionContainer.setVisibility(View.GONE);
@@ -305,7 +319,7 @@ public class VideoFragment extends Fragment implements AVEngineKit.CallSessionCa
             getActivity().finish();
             return;
         }
-        Glide.with(this).load(userInfo.portrait).into(portraitImageView);
+        GlideApp.with(this).load(userInfo.portrait).error(R.mipmap.default_header).into(portraitImageView);
         nameTextView.setText(userViewModel.getUserDisplayName(userInfo));
 
         updateCallDuration();
